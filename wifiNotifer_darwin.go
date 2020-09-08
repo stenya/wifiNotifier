@@ -16,34 +16,43 @@ package wifiNotifier
 static inline  char* nsstring2cstring(NSString *s){
     if (s == NULL) { return NULL; }
 
-    char *cstr = strdup([s UTF8String]);
+	char *cstr = strdup([s UTF8String]);
     return cstr;
 }
 
 #define NOT_CONNECTED @""
 
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+static inline CWInterface * getCWInterface() {
+	CWWiFiClient *swc = [CWWiFiClient sharedWiFiClient];
+	if (swc == nil) return nil;
+	return [swc interface];
+}
+
 static inline void wifi_network_changed(SCDynamicStoreRef store, CFArrayRef changedKeys, void *ctx)
 {
-	//NSLog(@"wifi_network_changed");
+	CWInterface * WiFiInterface = getCWInterface();
+	if (WiFiInterface == nil) return;
 
-	CWInterface *WiFiInterface = [CWInterface interface];
 	NSString *currentSSID = [WiFiInterface ssid] ? [WiFiInterface ssid] : NOT_CONNECTED;
 	extern void __onWifiChanged(char *);
 	__onWifiChanged(nsstring2cstring(currentSSID));
 }
 
 static inline char * getCurrentSSID(void) {
-    CWInterface *WiFiInterface = [CWInterface interface];
+	CWInterface * WiFiInterface = getCWInterface();
+	if (WiFiInterface == nil) return nsstring2cstring(NOT_CONNECTED);
+
 	NSString *ssid = [WiFiInterface ssid] ? [WiFiInterface ssid] : NOT_CONNECTED;
 	return nsstring2cstring(ssid);
 }
 
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 static inline void setWifiNotifier(void) {
-    CWInterface *WiFiInterface = [CWInterface interface];
+    CWInterface * WiFiInterface = getCWInterface();
+	if (WiFiInterface == nil) return;
 
-    NSSet *wifiInterfaces = [CWInterface interfaceNames];
+	NSArray* arr = [CWWiFiClient interfaceNames];
+	NSSet *wifiInterfaces = [NSSet setWithArray:arr];
+
     NSMutableArray *scKeys = [[NSMutableArray alloc] init];
     [wifiInterfaces enumerateObjectsUsingBlock:^(NSString *ifName, BOOL *stop)
      {
@@ -59,9 +68,7 @@ static inline void setWifiNotifier(void) {
 	CFRunLoopAddSource([[NSRunLoop currentRunLoop] getCFRunLoop], src, kCFRunLoopCommonModes);
 
 	CFRunLoopRun();
-
 }
-
 */
 import "C"
 import (
@@ -69,7 +76,6 @@ import (
 )
 
 var internalOnWifiChangedCb func(string)
-var internalOnGetSSIDCb func(string)
 
 //export __onWifiChanged
 func __onWifiChanged(ssid *C.char) {
@@ -81,6 +87,7 @@ func __onWifiChanged(ssid *C.char) {
 	}
 }
 
+// GetCurrentSSID returns current WiFi SSID
 func GetCurrentSSID() string {
 	ssid := C.getCurrentSSID()
 	goSsid := C.GoString(ssid)
@@ -88,8 +95,8 @@ func GetCurrentSSID() string {
 	return goSsid
 }
 
+// SetWifiNotifier initializes a handler method 'OnWifiChanged'
 func SetWifiNotifier(cb func(string)) {
 	internalOnWifiChangedCb = cb
 	go C.setWifiNotifier()
-	// log.Println("setWifiNotifier complated")
 }

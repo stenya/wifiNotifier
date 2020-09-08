@@ -151,6 +151,7 @@ func __onWifiChanged(ssid *C.char) {
 	}
 }
 
+// GetCurrentSSID returns current WiFi SSID
 func GetCurrentSSID() string {
 	ssid := C.getCurrentSSID()
 	goSsid := C.GoString(ssid)
@@ -158,8 +159,8 @@ func GetCurrentSSID() string {
 	return goSsid
 }
 
+// SetWifiNotifier initializes a handler method 'OnWifiChanged'
 func SetWifiNotifier(cb func(string)) {
 	internalOnWifiChangedCb = cb
 	go C.setWifiNotifier()
-	// log.Println("setWifiNotifier complated")
 }

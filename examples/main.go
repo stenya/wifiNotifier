@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/play175/wifiNotifier"
 )
@@ -15,6 +16,6 @@ func main() {
 	log.Println("current ssid:" + wifiNotifier.GetCurrentSSID())
 
 	for {
-
+		time.Sleep(time.Millisecond * 1000)
 	}
 }
