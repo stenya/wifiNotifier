@@ -1,3 +1,3 @@
-module github.com/play175/wifiNotifier
+module github.com/stenya/wifiNotifier
 
-go 1.12
+go 1.13

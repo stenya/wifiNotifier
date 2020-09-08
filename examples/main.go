@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/play175/wifiNotifier"
+	"github.com/stenya/wifiNotifier"
 )
 
 func main() {
