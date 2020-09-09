@@ -46,6 +46,36 @@ static inline char * getCurrentSSID(void) {
 	return nsstring2cstring(ssid);
 }
 
+static inline int getCurrentNetworkSecurity() {
+	CWInterface * WiFiInterface = getCWInterface();
+	if (WiFiInterface == nil) return 0xFFFFFFFF;
+
+	return [WiFiInterface security];
+}
+
+static inline char* getAvailableSSIDs(void) {
+	CWInterface * WiFiInterface = getCWInterface();
+	if (WiFiInterface == nil) return nil;
+
+	NSError *err = nil;
+	NSSet *scanset = [WiFiInterface scanForNetworksWithSSID:Nil error:&err];
+    if (err!=nil || scanset == nil || scanset.count == 0) return nil;
+
+	NSString *retString = nil;
+	int i=0;
+	for (CWNetwork * nw in scanset)
+    {
+		if (nw == nil || [nw ssid] == nil) continue;
+		NSString * ssid = [[[nw ssid] componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]] componentsJoinedByString:@" "];
+		if (i++ == 0)
+			retString = ssid;
+		else
+			retString = [NSString stringWithFormat:@"%@\n%@", retString , ssid];
+	}
+
+	return nsstring2cstring(retString);
+}
+
 static inline void setWifiNotifier(void) {
     CWInterface * WiFiInterface = getCWInterface();
 	if (WiFiInterface == nil) return;
@@ -72,6 +102,7 @@ static inline void setWifiNotifier(void) {
 */
 import "C"
 import (
+	"strings"
 	"unsafe"
 )
 
@@ -87,12 +118,25 @@ func __onWifiChanged(ssid *C.char) {
 	}
 }
 
+// GetAvailableSSIDs returns the list of the names of available Wi-Fi networks
+func GetAvailableSSIDs() []string {
+	ssidList := C.getAvailableSSIDs()
+	goSsidList := C.GoString(ssidList)
+	C.free(unsafe.Pointer(ssidList))
+	return strings.Split(goSsidList, "\n")
+}
+
 // GetCurrentSSID returns current WiFi SSID
 func GetCurrentSSID() string {
 	ssid := C.getCurrentSSID()
 	goSsid := C.GoString(ssid)
 	C.free(unsafe.Pointer(ssid))
 	return goSsid
+}
+
+// GetCurrentNetworkSecurity returns current security mode
+func GetCurrentNetworkSecurity() WiFiSecurity {
+	return WiFiSecurity(C.getCurrentNetworkSecurity())
 }
 
 // SetWifiNotifier initializes a handler method 'OnWifiChanged'
