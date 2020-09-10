@@ -1,7 +1,7 @@
 wifiNotifier
 ===
 
-Detect when WiFi changed (connected or disconnected or ssid changed), support Windows, Mac OS, Linux.
+Detect when WiFi changed (connected or disconnected or ssid changed), support Windows, Mac OS, Linux.  
 Additional functionality:
 - get current WiFi SSID
 - scan for a WiFi networks (macOS, Windows)
