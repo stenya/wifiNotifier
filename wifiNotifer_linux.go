@@ -67,10 +67,12 @@ static inline char * getCurrentSSID(void) {
 }
 
 static inline int getCurrentNetworkSecurity() {
-    return 0;
+    // TODO: implement getCurrentNetworkSecurity functionality
+    return 0xFFFFFFFF;
 }
 
 static inline char* getAvailableSSIDs(void) {
+    // TODO: implement getAvailableSSIDs functionality
     return NULL;
 }
 
