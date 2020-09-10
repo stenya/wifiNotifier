@@ -1,7 +1,11 @@
 wifiNotifier
 ===
 
-Detect when wifi changed(connected or disconnected or ssid changed),current only support Windows & Mac OS
+Detect when WiFi changed (connected or disconnected or ssid changed), support Windows, Mac OS, Linux.
+Additional functionality:
+- get current WiFi SSID
+- scan for a WiFi networks (macOS, Windows)
+- get current network cipher (macOS, Windows)
 
 examples
 
@@ -9,7 +13,7 @@ examples
 package main
 
 import (
-	"log"
+	"fmt"
 	"time"
 
 	"github.com/stenya/wifiNotifier"
@@ -17,14 +21,18 @@ import (
 
 func main() {
 
+	fmt.Println("* available networks:")
+	fmt.Println(wifiNotifier.GetAvailableSSIDs())
+
+	fmt.Printf("* current ssid: %v\n", wifiNotifier.GetCurrentSSID())
+	fmt.Printf("* current WiFi security: %v\n", wifiNotifier.GetCurrentNetworkSecurity())
+
 	wifiNotifier.SetWifiNotifier(func(ssid string) {
-		log.Println("onWifiChanged,current ssid:" + ssid)
+		fmt.Printf("* onWifiChanged. Current ssid: %v (security %v)\n", ssid, wifiNotifier.GetCurrentNetworkSecurity())
 	})
 
-	log.Println("current ssid:" + wifiNotifier.GetCurrentSSID())
-
 	for {
-		time.Sleep(time.Millisecond * 1000)
+		time.Sleep(time.Second)
 	}
 }
 ```
