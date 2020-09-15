@@ -3,6 +3,8 @@
 package wifiNotifier
 
 /*
+#cgo LDFLAGS: -liw
+
 #include <stdio.h>  // printf
 #include <string.h> // strdup prototype
 #include <stdlib.h> // free protype
@@ -18,6 +20,136 @@ package wifiNotifier
 
 #include <iwlib.h> // sudo apt-get install libiw-dev
 #include <ifaddrs.h>
+
+static inline char* concatenate(char* baseString, const char* toAdd, char delimiter) {
+	if (toAdd == NULL)
+		return baseString;
+	int addingLen = strlen(toAdd);
+	if (addingLen == 0)
+		return baseString;
+
+	if (baseString == NULL) {
+		baseString = (char*)malloc(addingLen +1);
+
+		memset(baseString, 0, addingLen + 1);
+		strcpy(baseString, toAdd);
+		return baseString;
+	}
+
+	int newSize = strlen(baseString) + ((delimiter != 0) ? 1 : 0) + addingLen + 1;
+	char* newString = (char*)malloc(newSize);
+
+	if (delimiter != 0)
+		sprintf(newString, "%s%c%s", baseString, delimiter, toAdd);
+	else
+		sprintf(newString, "%s%s", baseString, toAdd);
+
+	free(baseString);
+
+	return newString;
+}
+
+static inline char*  scanSSIDList(const char* interfaceName) {
+    char *ret = NULL;
+
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+        return NULL;
+
+    //---------------------------------------------------------------------
+
+    struct iw_range range;
+
+    if ((iw_get_range_info(sockfd, interfaceName, &range) < 0) ||
+        (range.we_version_compiled < 14))
+        return NULL; // interface doesn't support scanning
+
+    __u8 wev = range.we_version_compiled;
+
+    //---------------------------------------------------------------------
+
+    struct iwreq request;
+
+    request.u.param.flags = IW_SCAN_DEFAULT;
+    request.u.param.value = 0;
+
+    if (iw_set_ext(sockfd, interfaceName, SIOCSIWSCAN, &request) == -1)
+        return NULL;
+
+    //---------------------------------------------------------------------
+
+    struct timeval startTime, endTime, diffTime = { 0, 0 };
+    gettimeofday(&startTime, NULL);
+
+    char scanBuffer[0xFFFF];
+
+    int replyFound = 0;
+    while (replyFound == 0)
+    {
+        memset(scanBuffer, 0, sizeof(scanBuffer));
+        request.u.data.pointer = scanBuffer;
+        request.u.data.length = sizeof(scanBuffer);
+        request.u.data.flags = 0;
+
+        int result = iw_get_ext(sockfd,
+                                interfaceName,
+                                SIOCGIWSCAN,
+                                &request);
+
+        if (result == -1 && errno != EAGAIN)
+            return NULL;
+
+        if (result == 0)
+        {
+            replyFound = 1;
+            break;
+        }
+
+        gettimeofday(&endTime, NULL);
+        timersub(&endTime, &startTime, &diffTime);
+        if (diffTime.tv_sec > 10)
+            break;
+
+        usleep(100000);
+    }
+    close(sockfd);
+
+    //---------------------------------------------------------------------
+
+    if (replyFound)
+    {
+        struct iw_event iwe;
+        struct stream_descr stream;
+
+        iw_init_event_stream(&stream,
+                             scanBuffer,
+                             request.u.data.length);
+
+        char eventBuffer[512];
+
+        while (iw_extract_event_stream(&stream, &iwe, wev) > 0)
+        {
+            if (iwe.cmd == SIOCGIWESSID)
+            {
+                char essid[IW_ESSID_MAX_SIZE+1];
+                memset(essid, 0, sizeof(essid));
+
+                if((iwe.u.essid.pointer) && (iwe.u.essid.length))
+                {
+                    memcpy(essid,
+                           iwe.u.essid.pointer,
+                           iwe.u.essid.length);
+
+                    essid[iwe.u.essid.length] = 0;
+                    ret = concatenate(ret, essid, '\n');
+                }
+
+            }
+        }
+    }
+
+    return ret;
+}
 
 static inline char* get_essid (char *iface)
 {
@@ -72,8 +204,21 @@ static inline int getCurrentNetworkSecurity() {
 }
 
 static inline char* getAvailableSSIDs(void) {
-    // TODO: implement getAvailableSSIDs functionality
-    return NULL;
+    char* retSSID = NULL;
+
+    // get all available network interfaces
+    struct ifaddrs *addrs,*tmp_addrs;
+    getifaddrs(&addrs);
+    tmp_addrs = addrs;
+    while (tmp_addrs)
+    {
+        if (tmp_addrs->ifa_addr && tmp_addrs->ifa_addr->sa_family == AF_PACKET)
+            retSSID = concatenate(retSSID, scanSSIDList(tmp_addrs->ifa_name), '\n');
+        tmp_addrs = tmp_addrs->ifa_next;
+    }
+    freeifaddrs(addrs);
+
+    return retSSID;
 }
 
 static inline void onNetworkStateChanged()
