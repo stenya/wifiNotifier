@@ -5,9 +5,11 @@ Detect when WiFi changed (connected or disconnected or ssid changed), support Wi
 Additional functionality:
 - get current WiFi SSID
 - scan for a WiFi networks
-- get current network cipher (macOS, Windows)
+- get current network security (checking if the current network is insecure)
 
-examples
+Note: Some functionality requires privileged user rights.  
+
+Examples:
 
 ```
 package main
