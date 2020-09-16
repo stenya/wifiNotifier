@@ -49,7 +49,7 @@ static inline char* concatenate(char* baseString, const char* toAdd, char delimi
 	return newString;
 }
 
-static inline char*  scanSSIDList(const char* interfaceName) {
+static inline char*  scanSSIDList(const char* interfaceName, int *retIsInsecure, const char* ssidToCheckSecurity) {
     char *ret = NULL;
 
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -62,19 +62,25 @@ static inline char*  scanSSIDList(const char* interfaceName) {
 
     if ((iw_get_range_info(sockfd, interfaceName, &range) < 0) ||
         (range.we_version_compiled < 14))
+    {
+        close(sockfd);
         return NULL; // interface doesn't support scanning
+    }
 
     __u8 wev = range.we_version_compiled;
 
     //---------------------------------------------------------------------
 
     struct iwreq request;
-
+    memset(&request, 0, sizeof(request));
     request.u.param.flags = IW_SCAN_DEFAULT;
     request.u.param.value = 0;
 
     if (iw_set_ext(sockfd, interfaceName, SIOCSIWSCAN, &request) == -1)
+    {
+        close(sockfd);
         return NULL;
+    }
 
     //---------------------------------------------------------------------
 
@@ -97,7 +103,10 @@ static inline char*  scanSSIDList(const char* interfaceName) {
                                 &request);
 
         if (result == -1 && errno != EAGAIN)
+        {
+            close(sockfd);
             return NULL;
+        }
 
         if (result == 0)
         {
@@ -125,25 +134,43 @@ static inline char*  scanSSIDList(const char* interfaceName) {
                              scanBuffer,
                              request.u.data.length);
 
-        char eventBuffer[512];
+        char eventBuffer[512] = {0};
 
+        char essid[IW_ESSID_MAX_SIZE+1];
+        unsigned short encodeFlags = -1;
         while (iw_extract_event_stream(&stream, &iwe, wev) > 0)
         {
-            if (iwe.cmd == SIOCGIWESSID)
+            switch (iwe.cmd)
             {
-                char essid[IW_ESSID_MAX_SIZE+1];
-                memset(essid, 0, sizeof(essid));
-
-                if((iwe.u.essid.pointer) && (iwe.u.essid.length))
+                case SIOCGIWESSID:
                 {
-                    memcpy(essid,
-                           iwe.u.essid.pointer,
-                           iwe.u.essid.length);
+                    memset(essid, 0, sizeof(essid));
+                    if((iwe.u.essid.pointer) && (iwe.u.essid.length))
+                    {
+                        memcpy(essid,
+                            iwe.u.essid.pointer,
+                            iwe.u.essid.length);
 
-                    essid[iwe.u.essid.length] = 0;
-                    ret = concatenate(ret, essid, '\n');
+                        essid[iwe.u.essid.length] = 0;
+                        ret = concatenate(ret, essid, '\n');
+
+                        if (retIsInsecure!=NULL
+                            && ssidToCheckSecurity!=NULL
+                            && encodeFlags != -1
+                            && strcmp(essid, ssidToCheckSecurity)==0)
+                        {
+                            *retIsInsecure = ( encodeFlags & IW_ENCODE_DISABLED ) > 0; // IW_ENCODE_OPEN
+                            encodeFlags = -1;
+                        }
+                    }
                 }
+                break;
 
+                case SIOCGIWENCODE:
+                {
+                    encodeFlags = iwe.u.encoding.flags;
+                    break;
+                }
             }
         }
     }
@@ -174,7 +201,7 @@ static inline char* get_essid (char *iface)
    return strdup (essid);
 }
 
-static inline char * getCurrentSSID(void) {
+static inline char * getCurrentWifiInfo(int* retIsInsecure) {
     char* retSSID = NULL;
 
     // get all available network interfaces
@@ -186,9 +213,15 @@ static inline char * getCurrentSSID(void) {
         if (tmp_addrs->ifa_addr && tmp_addrs->ifa_addr->sa_family == AF_PACKET)
         {
             retSSID = get_essid (tmp_addrs->ifa_name);
-
             // do not forget to free 'retSSID' from memory!
-            if (retSSID!=NULL) break;
+            if (retSSID!=NULL)
+            {
+                if (retIsInsecure!=NULL) {
+                    char* wifiList = scanSSIDList(tmp_addrs->ifa_name, retIsInsecure, retSSID);
+                    if (wifiList!=NULL) free(wifiList);
+                }
+                break;
+            }
         }
 
         tmp_addrs = tmp_addrs->ifa_next;
@@ -198,9 +231,15 @@ static inline char * getCurrentSSID(void) {
     return retSSID;
 }
 
-static inline int getCurrentNetworkSecurity() {
-    // TODO: implement getCurrentNetworkSecurity functionality
-    return 0xFFFFFFFF;
+static inline char * getCurrentSSID(void) {
+    return getCurrentWifiInfo(NULL);
+}
+
+static inline int getCurrentNetworkIsInsecure() {
+    int retIsInecure = 0xFFFFFFFF;
+    char* ssid = getCurrentWifiInfo(&retIsInecure);
+    if (ssid!=NULL) free(ssid);
+    return retIsInecure;
 }
 
 static inline char* getAvailableSSIDs(void) {
@@ -213,7 +252,7 @@ static inline char* getAvailableSSIDs(void) {
     while (tmp_addrs)
     {
         if (tmp_addrs->ifa_addr && tmp_addrs->ifa_addr->sa_family == AF_PACKET)
-            retSSID = concatenate(retSSID, scanSSIDList(tmp_addrs->ifa_name), '\n');
+            retSSID = concatenate(retSSID, scanSSIDList(tmp_addrs->ifa_name, NULL, NULL), '\n');
         tmp_addrs = tmp_addrs->ifa_next;
     }
     freeifaddrs(addrs);
@@ -296,7 +335,11 @@ func GetCurrentSSID() string {
 
 // GetCurrentNetworkSecurity returns current security mode
 func GetCurrentNetworkSecurity() WiFiSecurity {
-	return WiFiSecurity(C.getCurrentNetworkSecurity())
+	ret := WiFiSecurityUnknown
+	if C.getCurrentNetworkIsInsecure() == 1 {
+		ret = WiFiSecurityNone
+	}
+	return ret
 }
 
 // SetWifiNotifier initializes a handler method 'OnWifiChanged'
