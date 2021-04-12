@@ -13,10 +13,10 @@ func main() {
 	fmt.Println(wifiNotifier.GetAvailableSSIDs())
 
 	fmt.Printf("* current ssid: %v\n", wifiNotifier.GetCurrentSSID())
-	fmt.Printf("* current WiFi security: %v\n", wifiNotifier.GetCurrentNetworkSecurity())
+	fmt.Printf("* current WiFi is insecure: %v\n", wifiNotifier.GetCurrentNetworkIsInsecure())
 
 	wifiNotifier.SetWifiNotifier(func(ssid string) {
-		fmt.Printf("* onWifiChanged. Current ssid: %v (security %v)\n", ssid, wifiNotifier.GetCurrentNetworkSecurity())
+		fmt.Printf("* onWifiChanged. Current ssid: %v (insecure %v)\n", ssid, wifiNotifier.GetCurrentNetworkIsInsecure())
 	})
 
 	for {
