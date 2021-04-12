@@ -1,13 +1,11 @@
-// +build darwin
+// +build darwin,!nowifi
 
 package wifiNotifier
 
 /*
 #cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Cocoa -framework SystemConfiguration -framework CoreWLAN -framework Foundation
+#cgo LDFLAGS: -framework SystemConfiguration -framework CoreWLAN -framework Foundation
 
-#import <Cocoa/Cocoa.h>
-#import <AppKit/NSApplication.h>
 #include <stdlib.h>
 #import <Foundation/Foundation.h>
 #import <CoreWLAN/CoreWLAN.h>
@@ -103,6 +101,7 @@ static inline void setWifiNotifier(void) {
 import "C"
 import (
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -134,13 +133,50 @@ func GetCurrentSSID() string {
 	return goSsid
 }
 
-// GetCurrentNetworkSecurity returns current security mode
-func GetCurrentNetworkSecurity() WiFiSecurity {
-	return WiFiSecurity(C.getCurrentNetworkSecurity())
+// GetCurrentNetworkIsInsecure returns current security mode
+func GetCurrentNetworkIsInsecure() bool {
+	const (
+		CWSecurityNone               = 0
+		CWSecurityWEP                = 1
+		CWSecurityWPAPersonal        = 2
+		CWSecurityWPAPersonalMixed   = 3
+		CWSecurityWPA2Personal       = 4
+		CWSecurityPersonal           = 5
+		CWSecurityDynamicWEP         = 6
+		CWSecurityWPAEnterprise      = 7
+		CWSecurityWPAEnterpriseMixed = 8
+		CWSecurityWPA2Enterprise     = 9
+		CWSecurityEnterprise         = 10
+		CWSecurityWPA3Personal       = 11
+		CWSecurityWPA3Enterprise     = 12
+		CWSecurityWPA3Transition     = 13
+	)
+
+	security := C.getCurrentNetworkSecurity()
+	switch security {
+	case CWSecurityNone,
+		CWSecurityWEP,
+		CWSecurityPersonal,
+		CWSecurityDynamicWEP:
+		return true
+	}
+	return false
 }
 
 // SetWifiNotifier initializes a handler method 'OnWifiChanged'
-func SetWifiNotifier(cb func(string)) {
+func SetWifiNotifier(cb func(string)) error {
 	internalOnWifiChangedCb = cb
-	go C.setWifiNotifier()
+	go func() {
+
+		for {
+			// Detection WiFi status change in infinite loop.
+			// C.setWifiNotifier() should never return.
+			//
+			// BUT! It can return in some corner cases (e.g. we call it on system boot when WiFi interface still not initialized)
+			// In this case - we waiting some delay and trying to call this function again
+			C.setWifiNotifier()
+			time.Sleep(time.Second)
+		}
+	}()
+	return nil
 }
